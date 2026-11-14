@@ -7,7 +7,7 @@ import axios from "../../../../lib/apiClient";
 import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
 import { useRouter } from "next/navigation";
-import { X, ShieldCheck, ShieldAlert } from "lucide-react";
+import { X } from "lucide-react";
 import Button from "../../../../components/Button";
 import { countriesData } from "@/data/IsoCode";
 
@@ -40,7 +40,7 @@ function InfoCard({
 
 interface User {
   referredByName?: string;
-  identityReviewMode?: "bdfx_documents";
+  identityReviewMode?: "bdfx_documents" | "bdfx_owner_review";
   phoneVerifiedAt?: string;
   emailVerifiedAt?: string;
   _id: string;
@@ -136,6 +136,15 @@ export default function UsersPage() {
   };
   const [verifying, setVerifying] = useState(false);
   const [issuingCountry, setIssuingCountry] = useState("");
+  const [registrationReason, setRegistrationReason] = useState("");
+  const [registrationApprovalOpen, setRegistrationApprovalOpen] = useState(false);
+  const [registrationApprovalBusy, setRegistrationApprovalBusy] = useState(false);
+  const [registrationApprovalMessage, setRegistrationApprovalMessage] = useState("");
+  useEffect(() => {
+    setRegistrationApprovalOpen(false);
+    setRegistrationReason("");
+    setRegistrationApprovalMessage("");
+  }, [selectedUser?._id]);
   useEffect(() => { setIssuingCountry(""); }, [selectedUser?._id]);
 
   // Add filter state
@@ -172,8 +181,8 @@ export default function UsersPage() {
 
   // ✅ Apply filter on users
   const filteredUsers = users.filter((u) => {
-    if (filter === "pending") return !u.isKycVerified;
-    if (filter === "approved") return u.isKycVerified;
+    if (filter === "pending") return !u.isVerified;
+    if (filter === "approved") return u.isVerified;
     return true;
   });
 
@@ -214,6 +223,25 @@ export default function UsersPage() {
       setVerifying(false);
     }
   };
+
+  async function approveRegistration(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedUser || registrationApprovalBusy || registrationReason.trim().length < 10) return;
+    const userId = selectedUser._id;
+    setRegistrationApprovalBusy(true);
+    setRegistrationApprovalMessage("");
+    try {
+      const { data } = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE}/api/auth/registration/${userId}/owner-approve`, { reason: registrationReason.trim() });
+      setUsers(users => users.map(user => user._id === userId ? { ...user, isVerified: true } : user));
+      setSelectedUser(user => user?._id === userId ? { ...user, isVerified: true } : user);
+      setRegistrationApprovalOpen(false);
+      setRegistrationApprovalMessage(data.message);
+    } catch (error) {
+      setRegistrationApprovalMessage(axios.isAxiosError(error) && typeof error.response?.data?.message === "string" ? error.response.data.message : "Could not approve the registration.");
+    } finally {
+      setRegistrationApprovalBusy(false);
+    }
+  }
 
   // Pagination
   const indexOfLastUser = currentPage * usersPerPage;
@@ -302,8 +330,8 @@ export default function UsersPage() {
             className="bg-[#1f2937] text-white border border-gray-600 rounded px-3 py-1"
           >
             <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
+            <option value="pending">Registration pending</option>
+            <option value="approved">Registration verified</option>
           </select>
 
           {/* ✅ Users per page dropdown */}
@@ -336,14 +364,13 @@ export default function UsersPage() {
                 {/* <th className="px-4 py-3">Nationality</th> */}
                 <th className="px-4 py-3">Referred By</th>
                 <th className="px-4 py-3">Registration</th>
-                <th className="px-4 py-3">KYC</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
             <tbody>
               {currentUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-6 text-gray-400">
+                  <td colSpan={6} className="text-center py-6 text-gray-400">
                     No users found.
                   </td>
                 </tr>
@@ -368,17 +395,6 @@ export default function UsersPage() {
                       <span className={user.isVerified ? "text-green-400 font-medium" : "text-yellow-400 font-medium"}>
                         {user.isVerified ? "Verified" : "Pending"}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.isKycVerified ? (
-                        <span className="text-green-400 font-medium">
-                          Verified
-                        </span>
-                      ) : (
-                        <span className="text-yellow-400 font-medium">
-                          Pending
-                        </span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Button
@@ -448,21 +464,6 @@ export default function UsersPage() {
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${selectedUser.isVerified ? "bg-green-600/20 text-green-400" : "bg-yellow-600/20 text-yellow-400"}`}>
                     {selectedUser.isVerified ? "Registration verified" : "Registration pending"}
                   </span>
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedUser.isKycVerified
-                        ? "bg-green-600/20 text-green-400"
-                        : "bg-yellow-600/20 text-yellow-400"
-                      }`}
-                  >
-                    {selectedUser.isKycVerified ? (
-                      <ShieldCheck size={12} />
-                    ) : (
-                      <ShieldAlert size={12} />
-                    )}
-                    {selectedUser.isKycVerified
-                      ? "KYC Verified"
-                      : "KYC Pending"}
-                  </span>
                   </div>
                 </div>
               </div>
@@ -481,7 +482,7 @@ export default function UsersPage() {
                 <InfoCard title="Personal Info">
                   <InfoRow label="Phone" value={selectedUser.phone} />
                   <InfoRow label="Email OTP" value={selectedUser.emailVerifiedAt ? "Verified" : selectedUser.isVerified ? "No OTP record" : "Pending"} />
-                  <InfoRow label="WhatsApp OTP" value={selectedUser.phoneVerifiedAt ? "Verified" : selectedUser.isVerified ? "No OTP record" : "Pending"} />
+                  <InfoRow label="WhatsApp OTP" value={selectedUser.phoneVerifiedAt ? "Verified" : selectedUser.isVerified && selectedUser.emailVerifiedAt ? "Not verified" : selectedUser.isVerified ? "No OTP record" : "Pending"} />
                   <InfoRow label="Gender" value={selectedUser.gender} />
                   <InfoRow
                     label="Nationality"
@@ -586,7 +587,7 @@ export default function UsersPage() {
                 {manualMessage && <p role="status" className="text-sm text-amber-200">{manualMessage}</p>}
               </section>}
               {/* Documents */}
-              <div>
+              {selectedUser.identityReviewMode !== "bdfx_owner_review" && <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
                   Documents
                 </h3>
@@ -635,11 +636,25 @@ export default function UsersPage() {
                     )}
                   </div>
                 )}
-              </div>
+              </div>}
+              {registrationApprovalMessage && <p role="status" className="text-sm text-amber-200">{registrationApprovalMessage}</p>}
+              {registrationApprovalOpen && <form onSubmit={approveRegistration} className="space-y-3 rounded-xl border border-gray-700 p-4">
+                <label className="block text-sm">
+                  Reason for approving registration
+                  <textarea autoFocus required minLength={10} maxLength={500} value={registrationReason} onChange={event => setRegistrationReason(event.target.value)} className="mt-2 block w-full rounded border border-gray-600 bg-gray-900 p-2" />
+                </label>
+                <p className="text-sm text-gray-300">The client can sign in. The WhatsApp number stays unverified.</p>
+                <button disabled={registrationApprovalBusy || registrationReason.trim().length < 10} className="rounded bg-green-700 px-4 py-2 text-sm disabled:opacity-50">{registrationApprovalBusy ? "Approving…" : "Confirm registration approval"}</button>
+              </form>}
             </div>
 
             {/* Actions */}
             <div className="sticky bottom-0 bg-[#1f2937] border-t border-gray-800 px-6 py-4 flex flex-wrap justify-end gap-3">
+              {adminSession?.role === "owner" && !selectedUser.isVerified && selectedUser.emailVerifiedAt && selectedUser.identityReviewMode === "bdfx_owner_review" && (
+                <button type="button" onClick={() => setRegistrationApprovalOpen(value => !value)} className="rounded-full bg-green-700 px-4 py-2 text-sm font-semibold">
+                  {registrationApprovalOpen ? "Cancel registration approval" : "Manually approve registration"}
+                </button>
+              )}
               {adminSession?.role === "owner" && selectedUser.identityReviewMode === "bdfx_documents" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
                 <label className="flex items-center gap-2 text-sm">ID issuing country
                   <select value={issuingCountry} onChange={event => setIssuingCountry(event.target.value)} className="rounded border border-gray-600 bg-gray-900 p-2">
@@ -648,7 +663,7 @@ export default function UsersPage() {
                   </select>
                 </label>
               )}
-              {adminSession?.role === "owner" && selectedUser.kycProvider !== "veriff" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
+              {adminSession?.role === "owner" && selectedUser.identityReviewMode !== "bdfx_owner_review" && selectedUser.kycProvider !== "veriff" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
                 <button
                   onClick={() => handleVerifyKyc(selectedUser.email)}
                   disabled={verifying || (selectedUser.identityReviewMode === "bdfx_documents" && !issuingCountry)}
@@ -658,7 +673,7 @@ export default function UsersPage() {
                 </button>
               )}
 
-              {adminSession?.role === "owner" && selectedUser.kycProvider !== "veriff" && <button
+              {adminSession?.role === "owner" && selectedUser.identityReviewMode !== "bdfx_owner_review" && selectedUser.kycProvider !== "veriff" && <button
                 onClick={() => handleRejectKyc(selectedUser.email)}
                 className="px-4 py-2 rounded-full text-sm font-semibold text-yellow-400 border border-yellow-600/40 hover:bg-yellow-600/10 transition"
               >

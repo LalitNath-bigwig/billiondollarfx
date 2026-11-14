@@ -294,7 +294,7 @@ export default function SignUpPage() {
         </div>
 
         {step === "form" && registrationOptions && (registrationOptions.identityVerificationDeferred ? (
-          <p className="mb-5 text-sm text-gray-200">Verify your email and mobile number to finish registration. You can complete identity verification from your dashboard before opening a live trading account.</p>
+          <p className="mb-5 text-sm text-gray-200">Verify your email and WhatsApp number to finish registration.</p>
         ) : <IdentityReadinessNotice />)}
         {feedback && <p role={feedback.success ? "status" : "alert"} className={`mb-5 rounded-lg border p-4 text-sm ${feedback.success ? "border-emerald-500 text-emerald-100" : "border-red-400 text-red-100"}`}>{feedback.text}</p>}
         {step === "form" && optionsError && <p role="alert" className="mb-4 text-sm">Registration could not be loaded. <button type="button" onClick={() => void loadOptions()} className="underline">Try again</button></p>}
