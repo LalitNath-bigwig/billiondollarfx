@@ -227,10 +227,10 @@ export default function SignUpPage() {
       setRegistrationToken("");
       setOtp("");
 
-      if (data.kycRequired) {
+      if (data.kycRequired || data.identityVerificationDeferred === true) {
         localStorage.setItem("bdfx_onboarding_intent", searchParams?.get("intent") === "ib" ? "ib" : "client");
         localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify({ ...data.user, kycProvider: "veriff" }));
+        localStorage.setItem("user", JSON.stringify({ ...data.user, kycProvider: data.kycRequired ? "veriff" : "manual" }));
         document.cookie = `token=${data.token}; Path=/; SameSite=Lax;${location.protocol === "https:" ? " Secure;" : ""}`;
         router.push(data.identityVerificationDeferred === true ? "/dashboard" : "/verify-identity");
       } else {
