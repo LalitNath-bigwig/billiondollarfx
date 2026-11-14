@@ -95,3 +95,24 @@ test("the caller sees the dial action for an open lead before the dialer overvie
   assert.doesNotMatch(view(lead, true), /Call via Hashmi/);
   assert.doesNotMatch(view({ ...lead, status: "closed" }), /Call via Hashmi/);
 });
+
+test("eligible callers can open both apps from a no-answer lead using its international number", () => {
+  const view = (record, permissions = {}) => renderToStaticMarkup(React.createElement(LeadDetails, {
+    lead: record, owner: false, mode: "unconfigured", onClose() {}, onChange() {}, ...permissions,
+  }));
+  const followUp = { ...lead, phone: "001 (202) 555-0101", status: "follow_up", outcome: "no_answer" };
+  const markup = view(followUp);
+  assert.match(markup, /href="https:\/\/t\.me\/\+12025550101" target="_blank" rel="noopener noreferrer"/);
+  assert.match(markup, /href="https:\/\/wa\.me\/12025550101" target="_blank" rel="noopener noreferrer"/);
+  for (const blocked of [
+    view(followUp, { readOnly: true }),
+    view(followUp, { owner: true }),
+    view({ ...followUp, status: "closed" }),
+    view({ ...followUp, outcome: "do_not_call" }),
+    view({ ...followUp, outcome: "number_not_in_use" }),
+    view({ ...followUp, phone: "2025550101" }),
+    view({ ...followUp, phone: "+12025550101?text=unexpected" }),
+  ]) {
+    assert.doesNotMatch(blocked, /href="https:\/\/(?:t\.me|wa\.me)\//);
+  }
+});
