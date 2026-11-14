@@ -41,6 +41,8 @@ function InfoCard({
 interface User {
   referredByName?: string;
   identityReviewMode?: "bdfx_documents" | "bdfx_owner_review";
+  portalAccessStatus?: "approved" | "rejected" | null;
+  portalBlocked?: boolean;
   phoneVerifiedAt?: string;
   emailVerifiedAt?: string;
   _id: string;
@@ -73,6 +75,22 @@ interface User {
   // Documents
   idProof1?: { docType?: string; docNumber?: string; image?: string };
   idProof2?: { docType?: string; docNumber?: string; image?: string };
+}
+
+type PortalAction = "approved" | "rejected" | "block" | "unblock";
+
+const portalActions: Record<PortalAction, { label: string; description: string }> = {
+  approved: { label: "Approve", description: "Allows BDFX portal sign-in when the client is unblocked." },
+  rejected: { label: "Reject", description: "Declines BDFX portal access and ends active sessions." },
+  block: { label: "Block", description: "Stops BDFX portal sign-in and ends active sessions." },
+  unblock: { label: "Unblock", description: "Applies the client’s previous access status. The client must sign in again." },
+};
+
+function portalStatus(user: User) {
+  if (user.portalBlocked) return "Blocked";
+  if (user.portalAccessStatus === "rejected") return "Portal rejected";
+  if (user.portalAccessStatus === "approved") return "Portal approved";
+  return user.isVerified ? "Registration verified" : "Registration pending";
 }
 
 export default function UsersPage() {
@@ -136,19 +154,17 @@ export default function UsersPage() {
   };
   const [verifying, setVerifying] = useState(false);
   const [issuingCountry, setIssuingCountry] = useState("");
-  const [registrationReason, setRegistrationReason] = useState("");
-  const [registrationApprovalOpen, setRegistrationApprovalOpen] = useState(false);
-  const [registrationApprovalBusy, setRegistrationApprovalBusy] = useState(false);
-  const [registrationApprovalMessage, setRegistrationApprovalMessage] = useState("");
+  const [portalAccessDecision, setPortalAccessDecision] = useState<PortalAction | null>(null);
+  const [portalAccessBusy, setPortalAccessBusy] = useState(false);
+  const [portalAccessMessage, setPortalAccessMessage] = useState("");
   useEffect(() => {
-    setRegistrationApprovalOpen(false);
-    setRegistrationReason("");
-    setRegistrationApprovalMessage("");
+    setPortalAccessDecision(null);
+    setPortalAccessMessage("");
   }, [selectedUser?._id]);
   useEffect(() => { setIssuingCountry(""); }, [selectedUser?._id]);
 
   // Add filter state
-  const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected" | "blocked">("all");
 
   // ✅ Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -181,8 +197,11 @@ export default function UsersPage() {
 
   // ✅ Apply filter on users
   const filteredUsers = users.filter((u) => {
-    if (filter === "pending") return !u.isVerified;
-    if (filter === "approved") return u.isVerified;
+    if (filter === "blocked") return u.portalBlocked;
+    if (filter !== "all" && u.portalBlocked) return false;
+    if (filter === "rejected") return u.portalAccessStatus === "rejected";
+    if (filter === "pending") return !u.portalAccessStatus && !u.isVerified;
+    if (filter === "approved") return u.portalAccessStatus === "approved" || (!u.portalAccessStatus && u.isVerified);
     return true;
   });
 
@@ -224,22 +243,22 @@ export default function UsersPage() {
     }
   };
 
-  async function approveRegistration(event: React.FormEvent) {
-    event.preventDefault();
-    if (!selectedUser || registrationApprovalBusy || registrationReason.trim().length < 10) return;
+  async function savePortalAccess() {
+    if (!selectedUser || !portalAccessDecision || portalAccessBusy) return;
     const userId = selectedUser._id;
-    setRegistrationApprovalBusy(true);
-    setRegistrationApprovalMessage("");
+    setPortalAccessBusy(true);
+    setPortalAccessMessage("");
     try {
-      const { data } = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE}/api/auth/registration/${userId}/owner-approve`, { reason: registrationReason.trim() });
-      setUsers(users => users.map(user => user._id === userId ? { ...user, isVerified: true } : user));
-      setSelectedUser(user => user?._id === userId ? { ...user, isVerified: true } : user);
-      setRegistrationApprovalOpen(false);
-      setRegistrationApprovalMessage(data.message);
+      const { data } = await axios.patch(`${process.env.NEXT_PUBLIC_API_BASE}/api/auth/users/${userId}/portal-access`, { decision: portalAccessDecision });
+      const status = { portalAccessStatus: data.portalAccessStatus, portalBlocked: data.portalBlocked, isVerified: data.isVerified };
+      setUsers(users => users.map(user => user._id === userId ? { ...user, ...status } : user));
+      setSelectedUser(user => user?._id === userId ? { ...user, ...status } : user);
+      setPortalAccessDecision(null);
+      setPortalAccessMessage(data.message);
     } catch (error) {
-      setRegistrationApprovalMessage(axios.isAxiosError(error) && typeof error.response?.data?.message === "string" ? error.response.data.message : "Could not approve the registration.");
+      setPortalAccessMessage(axios.isAxiosError(error) && typeof error.response?.data?.message === "string" ? error.response.data.message : "Could not update portal access.");
     } finally {
-      setRegistrationApprovalBusy(false);
+      setPortalAccessBusy(false);
     }
   }
 
@@ -324,14 +343,16 @@ export default function UsersPage() {
           <select
             value={filter}
             onChange={(e) => {
-              setFilter(e.target.value as "all" | "pending" | "approved");
+              setFilter(e.target.value as "all" | "pending" | "approved" | "rejected" | "blocked");
               setCurrentPage(1); // reset to first page
             }}
             className="bg-[#1f2937] text-white border border-gray-600 rounded px-3 py-1"
           >
             <option value="all">All</option>
             <option value="pending">Registration pending</option>
-            <option value="approved">Registration verified</option>
+            <option value="approved">Portal approved or verified</option>
+            <option value="rejected">Portal rejected</option>
+            <option value="blocked">Blocked</option>
           </select>
 
           {/* ✅ Users per page dropdown */}
@@ -363,7 +384,7 @@ export default function UsersPage() {
                 <th className="px-4 py-3">Phone</th>
                 {/* <th className="px-4 py-3">Nationality</th> */}
                 <th className="px-4 py-3">Referred By</th>
-                <th className="px-4 py-3">Registration</th>
+                <th className="px-4 py-3">Portal status</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
@@ -392,8 +413,8 @@ export default function UsersPage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      <span className={user.isVerified ? "text-green-400 font-medium" : "text-yellow-400 font-medium"}>
-                        {user.isVerified ? "Verified" : "Pending"}
+                      <span className={user.portalBlocked || user.portalAccessStatus === "rejected" ? "text-red-400 font-medium" : user.isVerified || user.portalAccessStatus === "approved" ? "text-green-400 font-medium" : "text-yellow-400 font-medium"}>
+                        {portalStatus(user)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -461,8 +482,8 @@ export default function UsersPage() {
                     {selectedUser.email}
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-2">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${selectedUser.isVerified ? "bg-green-600/20 text-green-400" : "bg-yellow-600/20 text-yellow-400"}`}>
-                    {selectedUser.isVerified ? "Registration verified" : "Registration pending"}
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${selectedUser.portalBlocked || selectedUser.portalAccessStatus === "rejected" ? "bg-red-600/20 text-red-400" : selectedUser.isVerified || selectedUser.portalAccessStatus === "approved" ? "bg-green-600/20 text-green-400" : "bg-yellow-600/20 text-yellow-400"}`}>
+                    {portalStatus(selectedUser)}
                   </span>
                   </div>
                 </div>
@@ -637,24 +658,26 @@ export default function UsersPage() {
                   </div>
                 )}
               </div>}
-              {registrationApprovalMessage && <p role="status" className="text-sm text-amber-200">{registrationApprovalMessage}</p>}
-              {registrationApprovalOpen && <form onSubmit={approveRegistration} className="space-y-3 rounded-xl border border-gray-700 p-4">
-                <label className="block text-sm">
-                  Reason for approving registration
-                  <textarea autoFocus required minLength={10} maxLength={500} value={registrationReason} onChange={event => setRegistrationReason(event.target.value)} className="mt-2 block w-full rounded border border-gray-600 bg-gray-900 p-2" />
-                </label>
-                <p className="text-sm text-gray-300">The client can sign in. The WhatsApp number stays unverified.</p>
-                <button disabled={registrationApprovalBusy || registrationReason.trim().length < 10} className="rounded bg-green-700 px-4 py-2 text-sm disabled:opacity-50">{registrationApprovalBusy ? "Approving…" : "Confirm registration approval"}</button>
-              </form>}
+              {portalAccessMessage && <p role="status" className="text-sm text-amber-200">{portalAccessMessage}</p>}
+              {portalAccessDecision && <section className="space-y-3 rounded-xl border border-gray-700 p-4">
+                <h3 className="font-semibold">{portalActions[portalAccessDecision].label} {selectedUser.fullName}?</h3>
+                <p className="text-sm text-gray-300">{portalActions[portalAccessDecision].description}</p>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" disabled={portalAccessBusy} onClick={() => void savePortalAccess()} className="rounded bg-slate-700 px-4 py-2 text-sm disabled:opacity-50">{portalAccessBusy ? "Saving…" : "Confirm"}</button>
+                  <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision(null)} className="rounded border border-gray-600 px-4 py-2 text-sm">Cancel</button>
+                </div>
+              </section>}
             </div>
 
             {/* Actions */}
             <div className="sticky bottom-0 bg-[#1f2937] border-t border-gray-800 px-6 py-4 flex flex-wrap justify-end gap-3">
-              {adminSession?.role === "owner" && !selectedUser.isVerified && selectedUser.emailVerifiedAt && selectedUser.identityReviewMode === "bdfx_owner_review" && (
-                <button type="button" onClick={() => setRegistrationApprovalOpen(value => !value)} className="rounded-full bg-green-700 px-4 py-2 text-sm font-semibold">
-                  {registrationApprovalOpen ? "Cancel registration approval" : "Manually approve registration"}
+              {adminSession?.role === "owner" && <div className="flex gap-2">
+                <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision("approved")} className="rounded-full bg-green-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Approve</button>
+                <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision("rejected")} className="rounded-full border border-red-600 px-4 py-2 text-sm font-semibold text-red-300 disabled:opacity-50">Reject</button>
+                <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision(selectedUser.portalBlocked ? "unblock" : "block")} className="rounded-full border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-50">
+                  {selectedUser.portalBlocked ? "Unblock" : "Block"}
                 </button>
-              )}
+              </div>}
               {adminSession?.role === "owner" && selectedUser.identityReviewMode === "bdfx_documents" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
                 <label className="flex items-center gap-2 text-sm">ID issuing country
                   <select value={issuingCountry} onChange={event => setIssuingCountry(event.target.value)} className="rounded border border-gray-600 bg-gray-900 p-2">
