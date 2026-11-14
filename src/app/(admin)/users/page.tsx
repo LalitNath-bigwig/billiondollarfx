@@ -41,6 +41,8 @@ function InfoCard({
 interface User {
   referredByName?: string;
   identityReviewMode?: "bdfx_documents";
+  phoneVerifiedAt?: string;
+  emailVerifiedAt?: string;
   _id: string;
   fullName: string;
   gender: string;
@@ -154,7 +156,15 @@ export default function UsersPage() {
     if (!localStorage.getItem("adminToken")) { router.replace("/admin-login"); return; }
     setLoading(true); setLoadError("");
     axios.get<User[]>(`${process.env.NEXT_PUBLIC_API_BASE}/api/auth/users`, { signal: controller.signal, timeout: 15000 })
-      .then(({ data }) => { if (!Array.isArray(data)) throw new Error("Invalid user list"); setUsers(data); })
+      .then(({ data }) => {
+        if (!Array.isArray(data)) throw new Error("Invalid user list");
+        setUsers(data);
+        const clientId = new URLSearchParams(window.location.search).get("client");
+        if (clientId) {
+          setSelectedUser(data.find(user => user._id === clientId) ?? null);
+          window.history.replaceState(null, "", window.location.pathname);
+        }
+      })
       .catch(() => { if (!controller.signal.aborted) setLoadError("Users could not be loaded. Please try again."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -325,6 +335,7 @@ export default function UsersPage() {
                 <th className="px-4 py-3">Phone</th>
                 {/* <th className="px-4 py-3">Nationality</th> */}
                 <th className="px-4 py-3">Referred By</th>
+                <th className="px-4 py-3">Registration</th>
                 <th className="px-4 py-3">KYC</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
@@ -332,7 +343,7 @@ export default function UsersPage() {
             <tbody>
               {currentUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-6 text-gray-400">
+                  <td colSpan={7} className="text-center py-6 text-gray-400">
                     No users found.
                   </td>
                 </tr>
@@ -353,6 +364,11 @@ export default function UsersPage() {
                         : "—"}
                     </td>
 
+                    <td className="px-4 py-3">
+                      <span className={user.isVerified ? "text-green-400 font-medium" : "text-yellow-400 font-medium"}>
+                        {user.isVerified ? "Verified" : "Pending"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       {user.isKycVerified ? (
                         <span className="text-green-400 font-medium">
@@ -428,8 +444,12 @@ export default function UsersPage() {
                   <p className="text-sm text-gray-400 truncate">
                     {selectedUser.email}
                   </p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${selectedUser.isVerified ? "bg-green-600/20 text-green-400" : "bg-yellow-600/20 text-yellow-400"}`}>
+                    {selectedUser.isVerified ? "Registration verified" : "Registration pending"}
+                  </span>
                   <span
-                    className={`mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedUser.isKycVerified
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedUser.isKycVerified
                         ? "bg-green-600/20 text-green-400"
                         : "bg-yellow-600/20 text-yellow-400"
                       }`}
@@ -443,6 +463,7 @@ export default function UsersPage() {
                       ? "KYC Verified"
                       : "KYC Pending"}
                   </span>
+                  </div>
                 </div>
               </div>
               <button
@@ -459,6 +480,8 @@ export default function UsersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <InfoCard title="Personal Info">
                   <InfoRow label="Phone" value={selectedUser.phone} />
+                  <InfoRow label="Email OTP" value={selectedUser.emailVerifiedAt ? "Verified" : selectedUser.isVerified ? "No OTP record" : "Pending"} />
+                  <InfoRow label="WhatsApp OTP" value={selectedUser.phoneVerifiedAt ? "Verified" : selectedUser.isVerified ? "No OTP record" : "Pending"} />
                   <InfoRow label="Gender" value={selectedUser.gender} />
                   <InfoRow
                     label="Nationality"
