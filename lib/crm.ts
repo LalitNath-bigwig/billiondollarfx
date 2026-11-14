@@ -81,6 +81,15 @@ export type LeadPage = { rows: Lead[]; total: number; page: number; limit: numbe
 
 export type HashmiResponse = { state: string; mode: Overview["dialerMode"] };
 
+export function leadChatLinks(phone: string) {
+  const international = phone.trim().replace(/^00/, "+");
+  if (!/^\+[\d\s().-]+$/.test(international)) return null;
+  const digits = international.replace(/\D/g, "");
+  if (!/^[1-9]\d{6,14}$/.test(digits)) return null;
+
+  return { telegram: `https://t.me/+${digits}`, whatsapp: `https://wa.me/${digits}` };
+}
+
 export function hashmiMessage(response: HashmiResponse) {
   if (response.state === "accepted") return response.mode === "developer" ? "Hashmi accepted the test request." : "Hashmi accepted the call request.";
   if (response.state === "rejected") return "Hashmi declined the call request. Check your Hashmi agent login and try again.";

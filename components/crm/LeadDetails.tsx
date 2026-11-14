@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Phone, X } from "lucide-react";
+import { MessageCircle, Phone, Send, X } from "lucide-react";
 import api from "../../lib/apiClient";
-import { buttonClass, cardClass, crmApi, crmError, dubaiTime, fieldClass, hashmiMessage, OUTCOME_LABELS, secondaryClass, type HashmiResponse, type Lead, type Overview } from "../../lib/crm";
+import { buttonClass, cardClass, crmApi, crmError, dubaiTime, fieldClass, hashmiMessage, leadChatLinks, OUTCOME_LABELS, secondaryClass, type HashmiResponse, type Lead, type Overview } from "../../lib/crm";
 
 type Outcome = keyof typeof OUTCOME_LABELS;
 type Activity = { _id: string; kind: "outcome" | "hashmi"; occurredAt: string; outcome?: Outcome; note?: string; attempted?: boolean;
@@ -34,6 +34,8 @@ export default function LeadDetails({ lead, owner, readOnly = false, mode, onClo
   const closed = closedOutcomes.has(outcome);
   const optedOut = lead.outcome === "do_not_call";
   const canLog = !owner && !readOnly && !optedOut && lead.outcome !== "number_not_in_use";
+  const canContact = canLog && lead.status !== "closed";
+  const chatLinks = canContact && leadChatLinks(lead.phone);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -120,9 +122,22 @@ export default function LeadDetails({ lead, owner, readOnly = false, mode, onClo
       </form>}
       {canLog && (
         <div className="mt-5 space-y-4">
-          {lead.status !== "closed" && <button type="button" onClick={dial} disabled={busy} className={buttonClass + " inline-flex items-center gap-2"}>
-            <Phone size={16} /> {mode === "developer" ? "Test Hashmi" : "Call via Hashmi"}
-          </button>}
+          {canContact && <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={dial} disabled={busy} className={buttonClass + " inline-flex items-center gap-2"}>
+                <Phone size={16} /> {mode === "developer" ? "Test Hashmi" : "Call via Hashmi"}
+              </button>
+              {chatLinks && <>
+                <a href={chatLinks.telegram} target="_blank" rel="noopener noreferrer" className={secondaryClass + " inline-flex items-center gap-2"}>
+                  <Send size={16} aria-hidden="true" /> Telegram
+                </a>
+                <a href={chatLinks.whatsapp} target="_blank" rel="noopener noreferrer" className={secondaryClass + " inline-flex items-center gap-2"}>
+                  <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                </a>
+              </>}
+            </div>
+            {chatLinks && <p className="mt-2 text-xs text-slate-300">No answer? Open a chat using your own signed-in Telegram or WhatsApp account.</p>}
+          </div>}
           <form onSubmit={event => { event.preventDefault(); void save(); }} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm">Call outcome
