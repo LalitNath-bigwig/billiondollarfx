@@ -20,7 +20,7 @@ import { Eye, EyeOff } from "lucide-react";
 // The backend remains authoritative for enrollment and every approval decision.
 const automaticKyc = process.env.NEXT_PUBLIC_VERIFF_ENABLED !== "false";
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://billion-doller-backend.onrender.com").replace(/\/+$/, "");
-type RegistrationOptions = { mobileOtpRequired: boolean; registrationAvailable: boolean };
+type RegistrationOptions = { mobileOtpRequired: boolean; registrationAvailable: boolean; identityVerificationDeferred?: boolean };
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -69,7 +69,8 @@ export default function SignUpPage() {
       if (response.status === 404) { setRegistrationOptions({ mobileOtpRequired: false, registrationAvailable: true }); return; }
       if (!response.ok) throw new Error("Unavailable");
       const data = await response.json();
-      setRegistrationOptions({ mobileOtpRequired: data.mobileOtpRequired === true, registrationAvailable: data.registrationAvailable === true });
+      setRegistrationOptions({ mobileOtpRequired: data.mobileOtpRequired === true, registrationAvailable: data.registrationAvailable === true,
+        identityVerificationDeferred: data.identityVerificationDeferred === true });
     } catch { if (!signal?.aborted) setOptionsError(true); }
   }, []);
   useEffect(() => {
@@ -231,7 +232,7 @@ export default function SignUpPage() {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify({ ...data.user, kycProvider: "veriff" }));
         document.cookie = `token=${data.token}; Path=/; SameSite=Lax;${location.protocol === "https:" ? " Secure;" : ""}`;
-        router.push("/verify-identity");
+        router.push(data.identityVerificationDeferred === true ? "/dashboard" : "/verify-identity");
       } else {
         setFeedback({ success: true, text: "Registration complete. Opening sign in…" });
         router.push("/login");
@@ -292,7 +293,9 @@ export default function SignUpPage() {
           </p>
         </div>
 
-        {step === "form" && <IdentityReadinessNotice />}
+        {step === "form" && registrationOptions && (registrationOptions.identityVerificationDeferred ? (
+          <p className="mb-5 text-sm text-gray-200">Verify your email and mobile number to finish registration. You can complete identity verification from your dashboard before opening a live trading account.</p>
+        ) : <IdentityReadinessNotice />)}
         {feedback && <p role={feedback.success ? "status" : "alert"} className={`mb-5 rounded-lg border p-4 text-sm ${feedback.success ? "border-emerald-500 text-emerald-100" : "border-red-400 text-red-100"}`}>{feedback.text}</p>}
         {step === "form" && optionsError && <p role="alert" className="mb-4 text-sm">Registration could not be loaded. <button type="button" onClick={() => void loadOptions()} className="underline">Try again</button></p>}
         {step === "form" && registrationOptions?.registrationAvailable === false && <p role="alert" className="mb-4 text-sm">New registration is temporarily unavailable. Please try again shortly.</p>}
