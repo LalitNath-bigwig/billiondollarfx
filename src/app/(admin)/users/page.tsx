@@ -9,6 +9,7 @@ import "react-medium-image-zoom/dist/styles.css";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import Button from "../../../../components/Button";
+import OwnerTradingReview from "../../../../components/OwnerTradingReview";
 import { countriesData } from "@/data/IsoCode";
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -250,7 +251,7 @@ export default function UsersPage() {
     setPortalAccessMessage("");
     try {
       const { data } = await axios.patch(`${process.env.NEXT_PUBLIC_API_BASE}/api/auth/users/${userId}/portal-access`, { decision: portalAccessDecision });
-      const status = { portalAccessStatus: data.portalAccessStatus, portalBlocked: data.portalBlocked, isVerified: data.isVerified };
+      const status = { portalAccessStatus: data.portalAccessStatus, portalBlocked: data.portalBlocked, isVerified: data.isVerified, updatedAt: data.updatedAt ?? selectedUser.updatedAt };
       setUsers(users => users.map(user => user._id === userId ? { ...user, ...status } : user));
       setSelectedUser(user => user?._id === userId ? { ...user, ...status } : user);
       setPortalAccessDecision(null);
@@ -608,6 +609,13 @@ export default function UsersPage() {
                 {manualMessage && <p role="status" className="text-sm text-amber-200">{manualMessage}</p>}
               </section>}
               {/* Documents */}
+              {adminSession?.role === "owner" && selectedUser.identityReviewMode === "bdfx_owner_review" && (
+                <OwnerTradingReview key={selectedUser._id} client={selectedUser} onApproved={() => {
+                  const id = selectedUser._id;
+                  setUsers(users => users.map(user => user._id === id ? { ...user, isKycVerified: true } : user));
+                  setSelectedUser(user => user?._id === id ? { ...user, isKycVerified: true } : user);
+                }} />
+              )}
               {selectedUser.identityReviewMode !== "bdfx_owner_review" && <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
                   Documents
