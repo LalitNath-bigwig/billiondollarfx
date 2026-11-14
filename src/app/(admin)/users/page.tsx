@@ -40,6 +40,7 @@ function InfoCard({
 
 interface User {
   referredByName?: string;
+  identityReviewMode?: "bdfx_documents";
   _id: string;
   fullName: string;
   gender: string;
@@ -132,6 +133,8 @@ export default function UsersPage() {
     finally { setManualBusy(false); }
   };
   const [verifying, setVerifying] = useState(false);
+  const [issuingCountry, setIssuingCountry] = useState("");
+  useEffect(() => { setIssuingCountry(""); }, [selectedUser?._id]);
 
   // Add filter state
   const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
@@ -180,10 +183,12 @@ export default function UsersPage() {
 
   const handleVerifyKyc = async (email: string) => {
     try {
+      const manualDocuments = selectedUser?.identityReviewMode === "bdfx_documents";
+      if (manualDocuments && (!issuingCountry || !confirm("Confirm that you reviewed the uploaded identity document."))) return;
       setVerifying(true);
       await axios.put(
         `${process.env.NEXT_PUBLIC_API_BASE}/api/auth/${email}/verify-kyc`,
-        { status: true }
+        { status: true, ...(manualDocuments && { documentCountry: issuingCountry, reviewedDocuments: true }) }
       );
 
       setUsers((prev) =>
@@ -576,13 +581,15 @@ export default function UsersPage() {
                             key={i}
                             className="bg-[#161f2e] border border-gray-800 rounded-xl overflow-hidden"
                           >
-                            <Zoom>
+                            {doc.image.includes("/download?") ? (
+                              <a href={doc.image} target="_blank" rel="noreferrer" className="block p-4 text-sm text-amber-200 underline">Open ID proof {i + 1}</a>
+                            ) : <Zoom>
                               <img
                                 src={doc.image}
                                 alt={`ID Proof ${i + 1}`}
                                 className="w-full h-44 object-cover cursor-pointer hover:opacity-90 transition"
                               />
-                            </Zoom>
+                            </Zoom>}
                             <div className="flex items-center justify-between gap-3 p-3 bg-gray-900/40 rounded-lg border border-white/10">
                               {/* Document Type Field */}
                               <div className="flex items-center gap-2 min-w-0">
@@ -610,17 +617,25 @@ export default function UsersPage() {
 
             {/* Actions */}
             <div className="sticky bottom-0 bg-[#1f2937] border-t border-gray-800 px-6 py-4 flex flex-wrap justify-end gap-3">
-              {selectedUser.kycProvider !== "veriff" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
+              {adminSession?.role === "owner" && selectedUser.identityReviewMode === "bdfx_documents" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
+                <label className="flex items-center gap-2 text-sm">ID issuing country
+                  <select value={issuingCountry} onChange={event => setIssuingCountry(event.target.value)} className="rounded border border-gray-600 bg-gray-900 p-2">
+                    <option value="">Select country</option>
+                    {countriesData.filter(({ iso }) => iso !== "AE").map(({ country, iso }) => <option key={iso} value={iso}>{country}</option>)}
+                  </select>
+                </label>
+              )}
+              {adminSession?.role === "owner" && selectedUser.kycProvider !== "veriff" && !selectedUser.isKycVerified && selectedUser.hasSubmittedDocuments && (
                 <button
                   onClick={() => handleVerifyKyc(selectedUser.email)}
-                  disabled={verifying}
+                  disabled={verifying || (selectedUser.identityReviewMode === "bdfx_documents" && !issuingCountry)}
                   className="px-4 py-2 rounded-full text-sm font-semibold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   {verifying ? "Verifying..." : "Verify KYC"}
                 </button>
               )}
 
-              {selectedUser.kycProvider !== "veriff" && <button
+              {adminSession?.role === "owner" && selectedUser.kycProvider !== "veriff" && <button
                 onClick={() => handleRejectKyc(selectedUser.email)}
                 className="px-4 py-2 rounded-full text-sm font-semibold text-yellow-400 border border-yellow-600/40 hover:bg-yellow-600/10 transition"
               >

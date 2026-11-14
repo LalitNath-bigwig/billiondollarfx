@@ -188,7 +188,7 @@ export default function KycVerification() {
 
   if (veriffManaged) return <VeriffVerification />;
 
-  if (hasSubmittedDocuments) {
+  if (hasSubmittedDocuments || isKycVerified) {
     return (
       <div className="space-y-6">
         <ProfileImage />

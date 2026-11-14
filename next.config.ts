@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
       { source: "/admin/login", destination: "/admin-login", permanent: false },
       { source: "/admin/dashboard", destination: "/adminDashboard", permanent: false },
       { source: "/admin-dashboard", destination: "/adminDashboard", permanent: false },
+      { source: "/verify-identity", destination: "/settings?tab=identity", permanent: false },
       {
         source: "/mt5-download-secure",
         destination:
