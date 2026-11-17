@@ -11,6 +11,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { MIN_WITHDRAWAL_USD, MIN_WITHDRAWAL_INR, RAMEEPAY_MIN_INR, RAMEEPAY_MAX_INR } from "../../../../constants/withdrawal";
 import { useMT5AccountSummary } from "../../../../lib/mt5Store";
 import { useUserProfile } from "../../../../lib/userStore";
+import { SriLankaPaymentPreview, SriLankaPreviewCard } from "../../../../components/payments/SriLankaPaymentPreview";
 
 export default function Withdrawal() {
   const { profile, accounts, isKycVerified, hasSubmittedDocuments, refresh } =
@@ -25,7 +26,7 @@ export default function Withdrawal() {
   // 🔹 Form state with default values
   const [form, setForm] = useState({
     accountNo: "",
-    currency: "CRYPTO" as "INR" | "USD" | "CRYPTO" | "VND",
+    currency: "CRYPTO" as "INR" | "USD" | "CRYPTO" | "VND" | "LKR",
     amount: "",
     note: "",
     // INR Details (Prefilled from User Object)
@@ -117,6 +118,7 @@ export default function Withdrawal() {
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
+  if (form.currency === "LKR") return;
   const amountNum = Number(form.amount);
 
   if (isNaN(amountNum) || amountNum <= 0) {
@@ -270,6 +272,10 @@ const handleSubmit = async (e: React.FormEvent) => {
           </div>
         )}
 
+        {profile && (!accounts.length || !isKycVerified) && (
+          <SriLankaPreviewCard direction="withdrawal" />
+        )}
+
         {/* Withdrawal Modal */}
         {showModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50 p-4">
@@ -308,13 +314,13 @@ const handleSubmit = async (e: React.FormEvent) => {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
                 {/* 1. Currency Option Selection */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                <div className="mb-4">
+                  <label htmlFor="withdrawal-currency" className="block text-xs font-semibold text-gray-400 uppercase mb-1">
                     Select Withdrawal Method
                   </label>
                   <select
+                    id="withdrawal-currency"
                     name="currency"
                     value={form.currency}
                     onChange={handleChange}
@@ -324,9 +330,14 @@ const handleSubmit = async (e: React.FormEvent) => {
                     <option value="INR">INR (Bank Transfer / UPI)</option>
                     <option value="USD">USD (International Wire)</option>
                     <option value="VND">VND (Vietnam Bank Transfer)</option>
+                    <option value="LKR">LKR (Sri Lanka · RameePay test)</option>
                   </select>
                 </div>
 
+              {form.currency === "LKR" ? (
+                <SriLankaPaymentPreview direction="withdrawal" />
+              ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
                 {/* 2A. CRYPTO FIELDS */}
                 {form.currency === "CRYPTO" && (
                   <>
@@ -595,6 +606,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                   disabled={loading}
                 />
               </form>
+              )}
             </div>
           </div>
         )}
