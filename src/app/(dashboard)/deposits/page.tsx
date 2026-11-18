@@ -10,6 +10,7 @@ import { SriLankaPreviewCard } from "../../../../components/payments/SriLankaPay
 import KycAlertModal from "../../../../components/KycAlertModal";
 import Button from "../../../../components/Button";
 import { useUserProfile } from "../../../../lib/userStore";
+import RameepaySlk from "../../../../components/deposits/RameepaySlk";
 
 function Deposit() {
   const router = useRouter();
@@ -45,6 +46,7 @@ function Deposit() {
                 <CryptoPay />
                 <Cregis />
                 <Floxy />
+                <RameepaySlk/>
               </>
             ) : (
               <div className="w-full text-center py-12">
@@ -61,7 +63,7 @@ function Deposit() {
                 )}
               </div>
             )}
-            <SriLankaPreviewCard direction="deposit" />
+            {/* <SriLankaPreviewCard direction="deposit" /> */}
           </div>
         )}
       </div>

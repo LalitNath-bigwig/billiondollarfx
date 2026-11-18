@@ -4,3 +4,4 @@
 // keep both in sync if you change one.
 export const MIN_DEPOSIT_USD = 1;
 export const MIN_DEPOSIT_INR = 10;
+export const MIN_DEPOSIT_LKR = 100;
