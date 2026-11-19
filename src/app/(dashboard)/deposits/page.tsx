@@ -11,6 +11,7 @@ import KycAlertModal from "../../../../components/KycAlertModal";
 import Button from "../../../../components/Button";
 import { useUserProfile } from "../../../../lib/userStore";
 import RameepaySlk from "../../../../components/deposits/RameepaySlk";
+import RameepayIdr from "../../../../components/deposits/RameepayIdr";
 
 function Deposit() {
   const router = useRouter();
@@ -47,6 +48,7 @@ function Deposit() {
                 <Cregis />
                 <Floxy />
                 <RameepaySlk/>
+                <RameepayIdr />
               </>
             ) : (
               <div className="w-full text-center py-12">
