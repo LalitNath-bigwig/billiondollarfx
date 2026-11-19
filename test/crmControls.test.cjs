@@ -29,7 +29,7 @@ function find(tree, predicate) {
 
 const api = { get() {}, post() {} };
 const crm = load("../lib/crm.ts", { "./apiClient": api });
-const LeadDetails = load("../components/crm/LeadDetails.tsx", { "../../lib/crm": crm, "../../lib/apiClient": api }).default;
+const LeadDetails = load("../components/crm/LeadDetails.tsx", { "../../lib/crm": crm, "../../lib/apiClient": api, "./WorkChat": () => null }).default;
 const lead = { id: "lead-1", leadId: "BDFX-test", name: "Fixture", phone: "+12025550101", status: "new", source: "COMEXFOREX" };
 
 test("a selected lead list stays selected when Data bank is opened again", async () => {
@@ -60,6 +60,8 @@ test("a selected lead list stays selected when Data bank is opened again", async
     "../../../../components/crm/LeadDetails": LeadDetails,
     "../../../../components/crm/DialPad": () => null,
     "../../../../components/crm/CallAssistant": () => null,
+    "../../../../components/crm/OwnerChannels": () => null,
+    "../../../../components/crm/WorkConnections": () => null,
   }).default;
   function render() { cursor = 0; effects = []; return Page(); }
   async function loadRows() { effects[1](); await new Promise(setImmediate); }
@@ -115,4 +117,14 @@ test("eligible callers can open both apps from a no-answer lead using its intern
   ]) {
     assert.doesNotMatch(blocked, /href="https:\/\/(?:t\.me|wa\.me)\//);
   }
+});
+
+test("9ance agents see their dialer on an assigned lead and cannot call an opted-out lead", () => {
+  const view = record => renderToStaticMarkup(React.createElement(LeadDetails, {
+    lead: record, owner: false, dialer: "9ance", mode: "live", onClose() {}, onChange() {},
+  }));
+  assert.match(view(lead), /Call via 9ance/);
+  assert.doesNotMatch(view(lead), /Call via Hashmi/);
+  assert.doesNotMatch(view({ ...lead, outcome: "do_not_call" }), /Call via 9ance/);
+  assert.match(crm.dialMessage({ provider: "9ance", state: "unconfirmed", mode: "live" }), /not been confirmed/);
 });
