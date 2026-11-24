@@ -6,7 +6,6 @@ import { Landmark, X } from "lucide-react";
 import Button from "../../components/Button";
 import toast from "react-hot-toast";
 import { announceBuddyIssue } from "../../lib/bdfxBuddy";
-import { MIN_DEPOSIT_IDR, MAX_DEPOSIT_IDR } from "../../constants/deposit";
 import { useUserProfile } from "../../lib/userStore";
 
 // Indonesia (IDR) deposit through RameeGlobalPay. Backend: POST
@@ -35,19 +34,12 @@ function RameepayIdr() {
 
     const value = form.amount.trim();
     // Rupiah has no decimals; the backend rejects anything but whole numbers.
-    if (!/^\d{1,7}$/.test(value)) {
+    // Min/max limits are enforced by the backend, which returns the message shown below.
+    if (!/^\d{1,12}$/.test(value) || Number(value) < 1) {
       toast.error("Enter a valid IDR amount in whole rupiah.");
       return;
     }
     const amount = Number(value);
-    if (amount < MIN_DEPOSIT_IDR) {
-      toast.error(`The minimum deposit amount is IDR ${MIN_DEPOSIT_IDR.toLocaleString("en-GB")}.`);
-      return;
-    }
-    if (amount > MAX_DEPOSIT_IDR) {
-      toast.error(`The maximum deposit amount is IDR ${MAX_DEPOSIT_IDR.toLocaleString("en-GB")}.`);
-      return;
-    }
     if (!form.accountNo) {
       toast.error("Select an account to deposit into.");
       return;
@@ -143,16 +135,15 @@ function RameepayIdr() {
                     value={form.amount}
                     onChange={handleChange}
                     required
-                    min={MIN_DEPOSIT_IDR}
-                    max={MAX_DEPOSIT_IDR}
+                    min={1}
                     step="1"
                     inputMode="numeric"
-                    placeholder={String(MIN_DEPOSIT_IDR)}
+                    placeholder="Enter amount"
                     className="w-full pl-12 pr-3 py-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-(--primary-color)"
                   />
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
-                  Minimum IDR {MIN_DEPOSIT_IDR.toLocaleString("en-GB")}, maximum IDR {MAX_DEPOSIT_IDR.toLocaleString("en-GB")}, whole rupiah only. Your account is credited in USD once the payment is confirmed.
+                  Whole rupiah only. Your account is credited in USD once the payment is confirmed.
                 </p>
               </div>
 
