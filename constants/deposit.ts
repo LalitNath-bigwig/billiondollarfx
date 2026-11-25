@@ -5,7 +5,7 @@
 export const MIN_DEPOSIT_USD = 1;
 export const MIN_DEPOSIT_INR = 10;
 export const MIN_DEPOSIT_LKR = 100;
-// IDR is whole rupiah. Not used by the IDR form any more: the backend enforces the
-// limits (US$1 minimum at the configured rate, maximum below) and returns the message.
-export const MIN_DEPOSIT_IDR = 20000;
+// IDR is whole rupiah. The IDR form enforces MIN_DEPOSIT_IDR; the backend also
+// enforces a US$1 minimum at the configured rate and the maximum below.
+export const MIN_DEPOSIT_IDR = 500000;
 export const MAX_DEPOSIT_IDR = 10000000; // matches backend DEFAULT_MAX_IDR

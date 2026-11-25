@@ -22,11 +22,15 @@ export default function Withdrawal() {
   const [showKycPopup, setShowKycPopup] = useState(false);
   // VND (Floxy) rate + minimum, fetched when the VND method is chosen.
   const [vndQuote, setVndQuote] = useState<{ vndPerUsd: number; minVnd: number } | null>(null);
+  // IDR (RameeGlobalPay) bank list + rate/limits, fetched when the IDR method is chosen.
+  const [idrBanks, setIdrBanks] = useState<{ code: string; description: string }[]>([]);
+  const [idrQuote, setIdrQuote] = useState<{ idrPerUsd: number; minIdr: number; maxIdr: number } | null>(null);
+  const [idrBanksLoading, setIdrBanksLoading] = useState(false);
 
   // 🔹 Form state with default values
   const [form, setForm] = useState({
     accountNo: "",
-    currency: "CRYPTO" as "INR" | "USD" | "CRYPTO" | "VND" | "LKR",
+    currency: "CRYPTO" as "INR" | "USD" | "CRYPTO" | "VND" | "IDR" | "LKR",
     amount: "",
     note: "",
     // INR Details (Prefilled from User Object)
@@ -48,6 +52,10 @@ export default function Withdrawal() {
     vndAccountNumber: "",
     vndBankName: "",
     vndRoutingCode: "",
+    // IDR bank details (RameeGlobalPay payout) - bank is picked from the live list
+    idrHolderName: "",
+    idrAccountNumber: "",
+    idrBankCode: "",
   });
 
   // Prefill the account selector and bank details from the shared profile
@@ -71,6 +79,8 @@ export default function Withdrawal() {
       vndHolderName: prev.vndHolderName || profile.accountHolderName || "",
       vndAccountNumber: prev.vndAccountNumber || profile.accountNumber || "",
       vndBankName: prev.vndBankName || profile.bankName || "",
+      idrHolderName: prev.idrHolderName || profile.accountHolderName || "",
+      idrAccountNumber: prev.idrAccountNumber || profile.accountNumber || "",
     }));
   }, [profile, accounts]);
 
@@ -86,6 +96,28 @@ export default function Withdrawal() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === "currency" && value === "VND") loadVndQuote();
+    if (name === "currency" && value === "IDR") loadIdrBanks();
+  };
+
+  // Bank list + rate/limits for IDR withdrawals; the backend re-checks everything on submit.
+  const loadIdrBanks = async () => {
+    setIdrBanksLoading(true);
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE}/api/payment/ramee/globalpayoutmethod`);
+      const banks: { code: string; description: string }[] = Array.isArray(res.data?.data) ? res.data.data : [];
+      setIdrBanks([...banks].sort((a, b) => a.description.localeCompare(b.description)));
+      const quote = res.data?.quote;
+      const next = quote
+        ? { idrPerUsd: Number(quote.idrPerUsd), minIdr: Number(quote.minIdr), maxIdr: Number(quote.maxIdr) }
+        : null;
+      setIdrQuote(next);
+      return next;
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "IDR withdrawals are unavailable right now.");
+      return null;
+    } finally {
+      setIdrBanksLoading(false);
+    }
   };
 
   // Rate + minimum for VND withdrawals; the backend locks the rate again on submit.
@@ -149,6 +181,33 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
     amountInUSD = amountNum / quote.vndPerUsd;
   }
+  if (form.currency === "IDR") {
+    const quote = idrQuote || (await loadIdrBanks());
+    if (!quote) return;
+    if (!Number.isInteger(amountNum)) {
+      toast.error("Enter a whole IDR amount.");
+      return;
+    }
+    if (amountNum < quote.minIdr || amountNum > quote.maxIdr) {
+      toast.error(
+        `IDR withdrawals must be between IDR ${quote.minIdr.toLocaleString("en-US")} and IDR ${quote.maxIdr.toLocaleString("en-US")}.`
+      );
+      return;
+    }
+    if (!form.idrBankCode) {
+      toast.error("Select a bank.");
+      return;
+    }
+    if (!/^\d{5,20}$/.test(form.idrAccountNumber.trim())) {
+      toast.error("Enter a valid bank account number (digits only).");
+      return;
+    }
+    if (!form.idrHolderName.trim()) {
+      toast.error("Enter the account holder name.");
+      return;
+    }
+    amountInUSD = Math.ceil((amountNum / quote.idrPerUsd) * 100) / 100;
+  }
 
   // 2. Balance Check (MT5 balance is in USD)
   if (amountInUSD > balance) {
@@ -190,9 +249,22 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   try {
     setLoading(true);
+    // IDR sends only the fields the backend reads for a RameeGlobalPay bank payout.
+    const payload =
+      form.currency === "IDR"
+        ? {
+            accountNo: form.accountNo,
+            currency: "IDR",
+            amount: form.amount,
+            note: form.note,
+            bankCode: form.idrBankCode,
+            account: form.idrAccountNumber.trim(),
+            accountHolderName: form.idrHolderName.trim(),
+          }
+        : form;
     const res = await axios.post(
       `${process.env.NEXT_PUBLIC_API_BASE}/api/payment/request`,
-      form
+      payload
     );
 
     if (res.data?.success) {
@@ -330,6 +402,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                     <option value="INR">INR (Bank Transfer / UPI)</option>
                     <option value="USD">USD (International Wire)</option>
                     <option value="VND">VND (Vietnam Bank Transfer)</option>
+                    <option value="IDR">IDR (Indonesia Bank Transfer)</option>
                     <option value="LKR">LKR (Sri Lanka · RameePay test)</option>
                   </select>
                 </div>
@@ -564,10 +637,61 @@ const handleSubmit = async (e: React.FormEvent) => {
                   </>
                 )}
 
+                {/* 2E. IDR FIELDS (RameeGlobalPay bank payout, bank chosen from the live list) */}
+                {form.currency === "IDR" && (
+                  <>
+                    <div>
+                      <label htmlFor="idrBankCode" className="block text-xs text-gray-400 mb-1">Bank</label>
+                      <select
+                        id="idrBankCode"
+                        name="idrBankCode"
+                        value={form.idrBankCode}
+                        onChange={handleChange}
+                        disabled={idrBanksLoading}
+                        className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm mb-3"
+                      >
+                        <option value="">
+                          {idrBanksLoading ? "Loading banks..." : idrBanks.length ? "Select your bank" : "No banks available"}
+                        </option>
+                        {idrBanks.map((bank) => (
+                          <option key={bank.code} value={bank.code}>
+                            {bank.description}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="idrHolderName" className="block text-xs text-gray-400 mb-1">Account Holder Name</label>
+                      <input
+                        id="idrHolderName"
+                        type="text"
+                        name="idrHolderName"
+                        placeholder="Name exactly as on the bank account"
+                        value={form.idrHolderName}
+                        onChange={handleChange}
+                        className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm mb-3"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="idrAccountNumber" className="block text-xs text-gray-400 mb-1">Bank Account Number</label>
+                      <input
+                        id="idrAccountNumber"
+                        type="text"
+                        inputMode="numeric"
+                        name="idrAccountNumber"
+                        placeholder="Digits only"
+                        value={form.idrAccountNumber}
+                        onChange={handleChange}
+                        className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+
                 {/* Common Inputs */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-  Amount ({form.currency === "INR" ? "₹" : form.currency === "VND" ? "VND" : "$"})
+  Amount ({form.currency === "INR" ? "₹" : form.currency === "VND" || form.currency === "IDR" ? form.currency : "$"})
 </label>
                   <input
                     type="number"
@@ -577,6 +701,21 @@ const handleSubmit = async (e: React.FormEvent) => {
                     onChange={handleChange}
                     className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm"
                   />
+                  {form.currency === "IDR" && idrQuote && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Whole rupiah, between IDR {idrQuote.minIdr.toLocaleString("en-US")} and IDR{" "}
+                      {idrQuote.maxIdr.toLocaleString("en-US")}.
+                      {Number(form.amount) > 0 && (
+                        <>
+                          {" "}About{" "}
+                          <span className="text-gray-200">
+                            ${(Math.ceil((Number(form.amount) / idrQuote.idrPerUsd) * 100) / 100).toFixed(2)}
+                          </span>{" "}
+                          will be deducted from your MT5 balance.
+                        </>
+                      )}
+                    </p>
+                  )}
                   {form.currency === "VND" && vndQuote && (
                     <p className="text-xs text-gray-400 mt-1">
                       Minimum VND {vndQuote.minVnd.toLocaleString("en-US")}.
