@@ -6,6 +6,7 @@ import { Wallet, X } from "lucide-react";
 import Button from "../../../../components/Button";
 import RegisterModal from "../../../../components/CreateAccount";
 import KycAlertModal from "../../../../components/KycAlertModal";
+import SearchableSelect from "../../../../components/SearchableSelect";
 import emptyIcon from "../../../../assets/icons/empty_state.png";
 import toast, { Toaster } from "react-hot-toast";
 import { MIN_WITHDRAWAL_USD, MIN_WITHDRAWAL_INR, RAMEEPAY_MIN_INR, RAMEEPAY_MAX_INR } from "../../../../constants/withdrawal";
@@ -642,23 +643,16 @@ const handleSubmit = async (e: React.FormEvent) => {
                   <>
                     <div>
                       <label htmlFor="idrBankCode" className="block text-xs text-gray-400 mb-1">Bank</label>
-                      <select
+                      <SearchableSelect
                         id="idrBankCode"
-                        name="idrBankCode"
+                        className="mb-3"
                         value={form.idrBankCode}
-                        onChange={handleChange}
-                        disabled={idrBanksLoading}
-                        className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm mb-3"
-                      >
-                        <option value="">
-                          {idrBanksLoading ? "Loading banks..." : idrBanks.length ? "Select your bank" : "No banks available"}
-                        </option>
-                        {idrBanks.map((bank) => (
-                          <option key={bank.code} value={bank.code}>
-                            {bank.description}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(code) => setForm((prev) => ({ ...prev, idrBankCode: code }))}
+                        disabled={idrBanksLoading || idrBanks.length === 0}
+                        placeholder={idrBanksLoading ? "Loading banks..." : idrBanks.length ? "Select your bank" : "No banks available"}
+                        searchPlaceholder="Search bank..."
+                        options={idrBanks.map((bank) => ({ value: bank.code, label: bank.description }))}
+                      />
                     </div>
                     <div>
                       <label htmlFor="idrHolderName" className="block text-xs text-gray-400 mb-1">Account Holder Name</label>
