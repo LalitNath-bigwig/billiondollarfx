@@ -32,12 +32,26 @@ export default function WithdrawalApprovalModal({
 }: ModalProps) {
     const isCrypto = selectedWithdrawal.currency === "CRYPTO";
     const isVnd = selectedWithdrawal.currency === "VND";
-    const canProcess = selectedWithdrawal.status === "Pending" || selectedWithdrawal.status === "Failed";
+    const isIdr = selectedWithdrawal.currency === "IDR";
     const floxy = selectedWithdrawal.floxy;
+    const idr = selectedWithdrawal.rameeGlobalIdr;
+    // An IDR payout whose last attempt was never confirmed stays "Processing":
+    // approving again checks its status first instead of re-sending.
+    const idrUnconfirmed = isIdr && selectedWithdrawal.status === "Processing" && idr?.needsReview === true;
+    const canReject = selectedWithdrawal.status === "Pending" || selectedWithdrawal.status === "Failed";
+    const canProcess = canReject || idrUnconfirmed;
 
     // Initial state selection logic
-    const [processType, setProcessType] = useState<"rameepay" | "cregis" | "manual" | "floxy">(
-        selectedWithdrawal.isManual ? "manual" : isCrypto ? "cregis" : isVnd ? "floxy" : "rameepay"
+    const [processType, setProcessType] = useState<"rameepay" | "cregis" | "manual" | "floxy" | "rameeglobalidr">(
+        selectedWithdrawal.isManual
+            ? "manual"
+            : isCrypto
+            ? "cregis"
+            : isVnd
+            ? "floxy"
+            : isIdr
+            ? "rameeglobalidr"
+            : "rameepay"
     );
     // Floxy VND balance figures (VND withdrawals only).
     const [floxyBalance, setFloxyBalance] = useState<
@@ -135,7 +149,7 @@ export default function WithdrawalApprovalModal({
         setLoading(true);
         try {
             const payload = {
-                processType, // 'rameepay' | 'cregis' | 'manual'
+                processType, // 'rameepay' | 'cregis' | 'manual' | 'floxy' | 'rameeglobalidr'
                 txId,
                 adminNote,
             };
@@ -147,7 +161,9 @@ export default function WithdrawalApprovalModal({
 
             if (res.data?.success) {
                 toast.success(
-                    selectedWithdrawal.status === "Failed"
+                    isIdr && res.data?.message
+                        ? res.data.message
+                        : selectedWithdrawal.status === "Failed"
                         ? "Payout retried successfully!"
                         : "Payout processed successfully!"
                 );
@@ -222,11 +238,27 @@ export default function WithdrawalApprovalModal({
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-gray-400">Amount</span>
                                 <span className="font-bold text-sm">
-                                    {isVnd
-                                        ? `VND ${Number(selectedWithdrawal.amount).toLocaleString("en-US")}`
+                                    {isVnd || isIdr
+                                        ? `${selectedWithdrawal.currency} ${Number(selectedWithdrawal.amount).toLocaleString("en-US")}`
                                         : `${selectedWithdrawal.amount} ${isCrypto ? selectedWithdrawal.cryptoSymbol || "USDT" : selectedWithdrawal.currency}`}
                                 </span>
                             </div>
+                            {isIdr && (
+                                <>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-400">Debited from MT5</span>
+                                        <span className="font-semibold">${selectedWithdrawal.amountUSD}</span>
+                                    </div>
+                                    {idr?.idrPerUsd && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400">Rate (locked)</span>
+                                            <span className="font-semibold text-xs">
+                                                1 USD = IDR {Math.round(idr.idrPerUsd).toLocaleString("en-US")}
+                                            </span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                             {isVnd && (
                                 <>
                                     <div className="flex justify-between items-center text-sm">
@@ -303,6 +335,12 @@ export default function WithdrawalApprovalModal({
                                             <span className="font-semibold text-xs">{floxy?.routingCode || "N/A"}</span>
                                         </div>
                                     )}
+                                    {isIdr && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400">Bank Code</span>
+                                            <span className="font-semibold text-xs font-mono">{idr?.bankCode || "N/A"}</span>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -355,8 +393,8 @@ export default function WithdrawalApprovalModal({
                                 Select Payout Gateway / Execution Mode
                             </label>
                             <div className={`grid ${isCrypto ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
-                                {/* RameePay option (cannot pay Vietnamese bank accounts) */}
-                                {!isVnd && (
+                                {/* RameePay option (cannot pay Vietnamese or Indonesian bank accounts) */}
+                                {!isVnd && !isIdr && (
                                     <button
                                         type="button"
                                         className={`p-3 rounded-lg text-sm font-semibold border text-center transition-all ${
@@ -385,6 +423,21 @@ export default function WithdrawalApprovalModal({
                                     </button>
                                 )}
 
+                                {/* RameeGlobalPay option (IDR only) */}
+                                {isIdr && (
+                                    <button
+                                        type="button"
+                                        className={`p-3 rounded-lg text-sm font-semibold border text-center transition-all ${
+                                            processType === "rameeglobalidr"
+                                                ? "bg-orange-600 border-orange-500 text-white shadow-lg"
+                                                : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                                        }`}
+                                        onClick={() => setProcessType("rameeglobalidr")}
+                                    >
+                                        RameeGlobalPay (IDR)
+                                    </button>
+                                )}
+
                                 {/* Cregis option (Crypto only) */}
                                 {isCrypto && (
                                     <button
@@ -400,18 +453,21 @@ export default function WithdrawalApprovalModal({
                                     </button>
                                 )}
 
-                                {/* Manual Transfer option */}
-                                <button
-                                    type="button"
-                                    className={`p-3 rounded-lg text-sm font-semibold border text-center transition-all ${
-                                        processType === "manual"
-                                            ? "bg-amber-600 border-amber-500 text-white shadow-lg"
-                                            : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
-                                    }`}
-                                    onClick={() => setProcessType("manual")}
-                                >
-                                    Manual Transfer
-                                </button>
+                                {/* Manual Transfer option (not while an IDR attempt is unconfirmed:
+                                    it may still pay out, so a manual transfer could pay twice) */}
+                                {!idrUnconfirmed && (
+                                    <button
+                                        type="button"
+                                        className={`p-3 rounded-lg text-sm font-semibold border text-center transition-all ${
+                                            processType === "manual"
+                                                ? "bg-amber-600 border-amber-500 text-white shadow-lg"
+                                                : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                                        }`}
+                                        onClick={() => setProcessType("manual")}
+                                    >
+                                        Manual Transfer
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}
@@ -532,6 +588,52 @@ export default function WithdrawalApprovalModal({
                         </div>
                     )}
 
+                    {/* RameeGlobalPay (IDR) payout status */}
+                    {isIdr && (idr?.payoutOrderId || idr?.payoutId || idr?.providerStatus || idr?.lastMessage) && (
+                        <div className="bg-[#111827] rounded-xl p-4 border border-gray-700 space-y-3">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">RameeGlobalPay</p>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                                {idr?.payoutOrderId && (
+                                    <>
+                                        <span className="text-gray-400">Our payout reference</span>
+                                        <span className="text-right font-mono break-all">{idr.payoutOrderId}</span>
+                                    </>
+                                )}
+                                {idr?.payoutId && (
+                                    <>
+                                        <span className="text-gray-400">RameeGlobalPay reference</span>
+                                        <span className="text-right font-mono break-all">{idr.payoutId}</span>
+                                    </>
+                                )}
+                                {idr?.providerStatus && (
+                                    <>
+                                        <span className="text-gray-400">Provider status</span>
+                                        <span className="text-right font-semibold">
+                                            {idr.providerStatus}
+                                            {idr.needsReview ? " (unconfirmed)" : ""}
+                                        </span>
+                                    </>
+                                )}
+                                {selectedWithdrawal.transactionReference && (
+                                    <>
+                                        <span className="text-gray-400">Bank reference (UTR)</span>
+                                        <span className="text-right font-mono break-all">{selectedWithdrawal.transactionReference}</span>
+                                    </>
+                                )}
+                                {idr?.lastMessage && <p className="col-span-2 mt-1 text-amber-400">{idr.lastMessage}</p>}
+                            </div>
+                        </div>
+                    )}
+
+                    {idrUnconfirmed && (
+                        <p className="text-xs text-amber-400 bg-amber-900/20 border border-amber-700 rounded-xl p-3">
+                            The last payout attempt was not confirmed by RameeGlobalPay, so it may still have been sent.
+                            Use <strong>Check &amp; Retry</strong> below: it checks the payout&apos;s status first and only
+                            sends it again if it was never created. Manual transfer and refund are blocked until this is
+                            resolved, to avoid paying the client twice.
+                        </p>
+                    )}
+
                     {selectedWithdrawal.status === "Failed" && (
                         <p className="text-xs text-amber-400 bg-amber-900/20 border border-amber-700 rounded-xl p-3">
                             The last payout attempt failed and the request is still holding the customer&apos;s funds.
@@ -540,10 +642,12 @@ export default function WithdrawalApprovalModal({
                         </p>
                     )}
 
-                    {selectedWithdrawal.status === "Processing" && (
+                    {selectedWithdrawal.status === "Processing" && !idrUnconfirmed && (
                         <p className="text-xs text-blue-400 bg-blue-900/20 border border-blue-700 rounded-xl p-3">
                             {isVnd
                                 ? "Floxy has accepted this payout and the bank is confirming it. It moves to Completed or Failed automatically when Floxy reports the result. Do not send it again."
+                                : isIdr
+                                ? "RameeGlobalPay has accepted this payout and the bank is confirming it. It moves to Completed or Failed automatically when RameeGlobalPay reports the result. Do not send it again."
                                 : "Cregis has accepted this payout and is confirming it on-chain. It will automatically move to Completed or Failed once Cregis sends the final confirmation - no action needed here yet."}
                         </p>
                     )}
@@ -551,7 +655,7 @@ export default function WithdrawalApprovalModal({
 
                 {/* Actions */}
                 <div className="sticky bottom-0 bg-[#1f2937]/95 backdrop-blur border-t border-gray-700 px-6 sm:px-8 py-4 flex justify-between items-center gap-3">
-                    {canProcess ? (
+                    {canReject ? (
                         <button
                             onClick={onReject}
                             disabled={rejecting || loading}
@@ -582,7 +686,7 @@ export default function WithdrawalApprovalModal({
                             >
                                 {loading
                                     ? "Processing..."
-                                    : `${selectedWithdrawal.status === "Failed" ? "Retry" : "Approve"} (${processType.toUpperCase()})`}
+                                    : `${idrUnconfirmed ? "Check & Retry" : selectedWithdrawal.status === "Failed" ? "Retry" : "Approve"} (${processType.toUpperCase()})`}
                             </button>
                         )}
                     </div>
