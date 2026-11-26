@@ -38,3 +38,13 @@ test("KYC approval is a separate manager permission", () => {
   for (const path of ["/users", "/payout-requests", "/staff-users"]) assert.equal(canAccessAdminPath(reviewer, path), false);
   assert.equal(canAccessAdminPath({ role: "manager", permissions: ["crm", "clients"] }, "/trading-approvals"), false);
 });
+
+test("portal approval can be delegated independently from KYC, client lists and finance", () => {
+  const session = { role: "manager", permissions: ["portal_approval"] };
+  assert.equal(adminHome(session), "/portal-approvals");
+  assert.equal(canAccessAdminPath(session, "/portal-approvals"), true);
+  for (const path of ["/users", "/trading-approvals", "/staff-users", "/payout-requests"]) {
+    assert.equal(canAccessAdminPath(session, path), false);
+  }
+  assert.equal(canAccessAdminPath({ role: "manager", permissions: ["clients", "trading_approval"] }, "/portal-approvals"), false);
+});

@@ -13,6 +13,7 @@ const PRIVATE_PATHS = [
   "/activity-log",
   "/staff-users",
   "/trading-approvals",
+  "/portal-approvals",
   "/business-report",
   "/verify-identity",
   "/introducing-broker",
