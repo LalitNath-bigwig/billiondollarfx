@@ -13,7 +13,7 @@ export interface Withdrawal {
   _id: string;
   orderid: string;
   accountNo: string;
-  currency: "INR" | "USD" | "CRYPTO" | "VND" | "IDR";
+  currency: "INR" | "USD" | "CRYPTO" | "VND" | "IDR" | "LKR";
   amount: number;
   amountUSD?: string;
   status: "Pending" | "Processing" | "Completed" | "Rejected" | "Failed";
@@ -57,6 +57,13 @@ export interface Withdrawal {
     providerStatus?: string;
     needsReview?: boolean;
     lastMessage?: string;
+  };
+  // RameeGlobalPay (LKR) payout bookkeeping
+  rameeGlobalLkr?: {
+    bankCode?: string;
+    lkrPerUsd?: number;
+    payoutId?: string;
+    providerStatus?: string;
   };
 }
 
@@ -110,7 +117,7 @@ export default function AdminWithdrawals() {
   const formatAmount = (w: Withdrawal) => {
     if (w.currency === "CRYPTO") return `${w.amount} ${w.cryptoSymbol || "USDT"}`;
     if (w.currency === "INR") return `₹${w.amount}`;
-    if (w.currency === "VND" || w.currency === "IDR") return `${w.currency} ${Number(w.amount).toLocaleString("en-US")}`;
+    if (w.currency === "VND" || w.currency === "IDR" || w.currency === "LKR") return `${w.currency} ${Number(w.amount).toLocaleString("en-US")}`;
     return `$${w.amount}`;
   };
 
@@ -170,6 +177,8 @@ export default function AdminWithdrawals() {
       ? "bg-rose-900 text-rose-300"
       : currency === "IDR"
       ? "bg-orange-900 text-orange-300"
+      : currency === "LKR"
+      ? "bg-teal-900 text-teal-300"
       : "bg-green-900 text-green-300";
 
   return (
@@ -178,7 +187,7 @@ export default function AdminWithdrawals() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Withdrawal Requests</h1>
           <p className="text-gray-400 mt-1 text-sm">
-            Manage and review user withdrawal requests across INR, USD, VND, IDR, and Crypto methods.
+            Manage and review user withdrawal requests across INR, USD, VND, IDR, LKR, and Crypto methods.
           </p>
         </div>
         <button

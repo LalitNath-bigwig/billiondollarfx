@@ -33,8 +33,10 @@ export default function WithdrawalApprovalModal({
     const isCrypto = selectedWithdrawal.currency === "CRYPTO";
     const isVnd = selectedWithdrawal.currency === "VND";
     const isIdr = selectedWithdrawal.currency === "IDR";
+    const isLkr = selectedWithdrawal.currency === "LKR";
     const floxy = selectedWithdrawal.floxy;
     const idr = selectedWithdrawal.rameeGlobalIdr;
+    const lkr = selectedWithdrawal.rameeGlobalLkr;
     // An IDR payout whose last attempt was never confirmed stays "Processing":
     // approving again checks its status first instead of re-sending.
     const idrUnconfirmed = isIdr && selectedWithdrawal.status === "Processing" && idr?.needsReview === true;
@@ -42,7 +44,7 @@ export default function WithdrawalApprovalModal({
     const canProcess = canReject || idrUnconfirmed;
 
     // Initial state selection logic
-    const [processType, setProcessType] = useState<"rameepay" | "cregis" | "manual" | "floxy" | "rameeglobalidr">(
+    const [processType, setProcessType] = useState<"rameepay" | "cregis" | "manual" | "floxy" | "rameeglobalidr" | "rameegloballkr">(
         selectedWithdrawal.isManual
             ? "manual"
             : isCrypto
@@ -51,6 +53,8 @@ export default function WithdrawalApprovalModal({
             ? "floxy"
             : isIdr
             ? "rameeglobalidr"
+            : isLkr
+            ? "rameegloballkr"
             : "rameepay"
     );
     // Floxy VND balance figures (VND withdrawals only).
@@ -149,7 +153,7 @@ export default function WithdrawalApprovalModal({
         setLoading(true);
         try {
             const payload = {
-                processType, // 'rameepay' | 'cregis' | 'manual' | 'floxy' | 'rameeglobalidr'
+                processType, // 'rameepay' | 'cregis' | 'manual' | 'floxy' | 'rameeglobalidr' | 'rameegloballkr'
                 txId,
                 adminNote,
             };
@@ -161,7 +165,7 @@ export default function WithdrawalApprovalModal({
 
             if (res.data?.success) {
                 toast.success(
-                    isIdr && res.data?.message
+                    (isIdr || isLkr) && res.data?.message
                         ? res.data.message
                         : selectedWithdrawal.status === "Failed"
                         ? "Payout retried successfully!"
@@ -238,7 +242,7 @@ export default function WithdrawalApprovalModal({
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-gray-400">Amount</span>
                                 <span className="font-bold text-sm">
-                                    {isVnd || isIdr
+                                    {isVnd || isIdr || isLkr
                                         ? `${selectedWithdrawal.currency} ${Number(selectedWithdrawal.amount).toLocaleString("en-US")}`
                                         : `${selectedWithdrawal.amount} ${isCrypto ? selectedWithdrawal.cryptoSymbol || "USDT" : selectedWithdrawal.currency}`}
                                 </span>
@@ -254,6 +258,22 @@ export default function WithdrawalApprovalModal({
                                             <span className="text-gray-400">Rate (locked)</span>
                                             <span className="font-semibold text-xs">
                                                 1 USD = IDR {Math.round(idr.idrPerUsd).toLocaleString("en-US")}
+                                            </span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            {isLkr && (
+                                <>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-400">Debited from MT5</span>
+                                        <span className="font-semibold">${selectedWithdrawal.amountUSD}</span>
+                                    </div>
+                                    {lkr?.lkrPerUsd && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400">Rate (locked)</span>
+                                            <span className="font-semibold text-xs">
+                                                1 USD = LKR {lkr.lkrPerUsd.toLocaleString("en-US")}
                                             </span>
                                         </div>
                                     )}
@@ -341,6 +361,12 @@ export default function WithdrawalApprovalModal({
                                             <span className="font-semibold text-xs font-mono">{idr?.bankCode || "N/A"}</span>
                                         </div>
                                     )}
+                                    {isLkr && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400">Bank Code</span>
+                                            <span className="font-semibold text-xs font-mono">{lkr?.bankCode || "N/A"}</span>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -393,8 +419,8 @@ export default function WithdrawalApprovalModal({
                                 Select Payout Gateway / Execution Mode
                             </label>
                             <div className={`grid ${isCrypto ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
-                                {/* RameePay option (cannot pay Vietnamese or Indonesian bank accounts) */}
-                                {!isVnd && !isIdr && (
+                                {/* RameePay option (cannot pay Vietnamese, Indonesian or Sri Lankan bank accounts) */}
+                                {!isVnd && !isIdr && !isLkr && (
                                     <button
                                         type="button"
                                         className={`p-3 rounded-lg text-sm font-semibold border text-center transition-all ${
@@ -435,6 +461,21 @@ export default function WithdrawalApprovalModal({
                                         onClick={() => setProcessType("rameeglobalidr")}
                                     >
                                         RameeGlobalPay (IDR)
+                                    </button>
+                                )}
+
+                                {/* RameeGlobalPay option (LKR only) */}
+                                {isLkr && (
+                                    <button
+                                        type="button"
+                                        className={`p-3 rounded-lg text-sm font-semibold border text-center transition-all ${
+                                            processType === "rameegloballkr"
+                                                ? "bg-teal-600 border-teal-500 text-white shadow-lg"
+                                                : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                                        }`}
+                                        onClick={() => setProcessType("rameegloballkr")}
+                                    >
+                                        RameeGlobalPay (LKR)
                                     </button>
                                 )}
 
@@ -648,6 +689,10 @@ export default function WithdrawalApprovalModal({
                                 ? "Floxy has accepted this payout and the bank is confirming it. It moves to Completed or Failed automatically when Floxy reports the result. Do not send it again."
                                 : isIdr
                                 ? "RameeGlobalPay has accepted this payout and the bank is confirming it. It moves to Completed or Failed automatically when RameeGlobalPay reports the result. Do not send it again."
+                                : isLkr
+                                ? lkr?.payoutId
+                                    ? `RameeGlobalPay has accepted this payout (reference ${lkr.payoutId}). It moves to Completed or Failed automatically when RameeGlobalPay reports the result. Do not send it again.`
+                                    : "This LKR payout was sent to RameeGlobalPay but not confirmed. Check it in the RameeGlobalPay panel before doing anything else - do not transfer it manually or refund it until you know its status."
                                 : "Cregis has accepted this payout and is confirming it on-chain. It will automatically move to Completed or Failed once Cregis sends the final confirmation - no action needed here yet."}
                         </p>
                     )}

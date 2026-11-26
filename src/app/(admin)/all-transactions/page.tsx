@@ -61,7 +61,7 @@ const getCurrencySymbol = (
 ): string => {
   if (type === "withdrawal") {
     const currency = (row as WithdrawalResponse).currency;
-    return currency === "INR" ? "₹" : currency === "VND" || currency === "IDR" ? `${currency} ` : "$";
+    return currency === "INR" ? "₹" : currency === "VND" || currency === "IDR" || currency === "LKR" ? `${currency} ` : "$";
   }
   // Floxy orders store the USD credited (the VND paid is kept separately).
   const provider = String((row as DepositResponse).provider || "").toUpperCase();
