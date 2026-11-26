@@ -10,12 +10,16 @@ export const managerPermissions = {
   crm: "CRM Agent · assigned leads and own clients",
   crm_view: "CRM View-only · lead lists and team reports",
   crm_team: "CRM Team Report · call counts and member status",
+  portal_approval: "Approve client portal sign-in",
+  trading_approval: "Approve client KYC and trading verification",
 } as const;
 export type AdminPermission = keyof typeof managerPermissions;
 export interface AdminSession { email: string; fullName: string; role: "owner" | "manager"; permissions: AdminPermission[] }
 const routes: Record<string, AdminPermission | "owner"> = {
   adminDashboard: "reports", "business-report": "reports", users: "clients", bankapproval: "finance", brokers: "partners", tickets: "support", "chat-reports": "support", IB: "partners", "payout-requests": "finance", "all-transactions": "finance", "blog-management": "content", enquiries: "enquiries", "staff-users": "owner", "activity-log": "owner", "email-marketing": "owner", "website-analytics": "website_analytics",
   crm: "crm",
+  "portal-approvals": "portal_approval",
+  "trading-approvals": "trading_approval",
 };
 export function canAccessAdminPath(session: AdminSession, path: string) {
   if (session.role === "owner") return true;

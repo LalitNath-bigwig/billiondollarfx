@@ -103,6 +103,8 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
             pathname={pathname}
           />
           <NavLink href="/crm" label="CRM" icon={Briefcase} pathname={pathname} />
+          <NavLink href="/trading-approvals" label="KYC approvals" icon={Users} pathname={pathname} />
+          <NavLink href="/portal-approvals" label="Portal approvals" icon={Users} pathname={pathname} />
           <NavLink href="/enquiries" label="Enquiries" icon={MessageSquare} pathname={pathname} />
           <NavLink href="/chat-reports" label="Chat Reports" icon={MessageSquare} pathname={pathname} />
           <NavLink

@@ -30,3 +30,21 @@ test("owners retain staff/history access while managers only receive their selec
   for (const path of ["/staff-users", "/business-report", "/users", "/payout-requests", "/email-marketing"]) assert.equal(canAccessAdminPath(marketing, path), false);
   assert.equal(canAccessAdminPath({ role: "manager", permissions: ["content"] }, "/blog-management/add"), true);
 });
+
+test("KYC approval is a separate manager permission", () => {
+  const reviewer = { role: "manager", permissions: ["trading_approval"] };
+  assert.equal(adminHome(reviewer), "/trading-approvals");
+  assert.equal(canAccessAdminPath(reviewer, "/trading-approvals"), true);
+  for (const path of ["/users", "/payout-requests", "/staff-users"]) assert.equal(canAccessAdminPath(reviewer, path), false);
+  assert.equal(canAccessAdminPath({ role: "manager", permissions: ["crm", "clients"] }, "/trading-approvals"), false);
+});
+
+test("portal approval can be delegated independently from KYC, client lists and finance", () => {
+  const session = { role: "manager", permissions: ["portal_approval"] };
+  assert.equal(adminHome(session), "/portal-approvals");
+  assert.equal(canAccessAdminPath(session, "/portal-approvals"), true);
+  for (const path of ["/users", "/trading-approvals", "/staff-users", "/payout-requests"]) {
+    assert.equal(canAccessAdminPath(session, path), false);
+  }
+  assert.equal(canAccessAdminPath({ role: "manager", permissions: ["clients", "trading_approval"] }, "/portal-approvals"), false);
+});

@@ -7,12 +7,14 @@ import { countriesData } from "@/data/IsoCode";
 const accept = ".jpg,.jpeg,.png,.pdf";
 const field = "mt-1 block w-full rounded border border-slate-600 bg-slate-950 p-2";
 
+export type ReviewClient = { _id: string; isVerified?: boolean; isKycVerified?: boolean; updatedAt?: string; portalBlocked?: boolean; portalAccessStatus?: string | null };
 type Props = {
-  client: { _id: string; isVerified?: boolean; isKycVerified?: boolean; updatedAt?: string; portalBlocked?: boolean; portalAccessStatus?: string | null };
+  client: ReviewClient;
+  canOpenEvidence: boolean;
   onApproved: () => void;
 };
 
-export default function OwnerTradingReview({ client, onApproved }: Props) {
+export default function OwnerTradingReview({ client, canOpenEvidence, onApproved }: Props) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingEvidence, setLoadingEvidence] = useState(false);
@@ -60,9 +62,9 @@ export default function OwnerTradingReview({ client, onApproved }: Props) {
       {client.isKycVerified ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-green-300">Trading verification approved</span>
-          <button type="button" onClick={() => void openEvidence()} disabled={loadingEvidence} className="text-amber-200 underline disabled:opacity-50">
+          {canOpenEvidence && <button type="button" onClick={() => void openEvidence()} disabled={loadingEvidence} className="text-amber-200 underline disabled:opacity-50">
             {loadingEvidence ? "Loading…" : "Get evidence links"}
-          </button>
+          </button>}
           {links && <>
             <a href={links.identity} target="_blank" rel="noreferrer" className="text-amber-200 underline">Open identity evidence</a>
             <a href={links.address} target="_blank" rel="noreferrer" className="text-amber-200 underline">Open address evidence</a>
