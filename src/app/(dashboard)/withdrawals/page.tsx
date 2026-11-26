@@ -12,7 +12,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { MIN_WITHDRAWAL_USD, MIN_WITHDRAWAL_INR, RAMEEPAY_MIN_INR, RAMEEPAY_MAX_INR } from "../../../../constants/withdrawal";
 import { useMT5AccountSummary } from "../../../../lib/mt5Store";
 import { useUserProfile } from "../../../../lib/userStore";
-import { SriLankaPaymentPreview, SriLankaPreviewCard } from "../../../../components/payments/SriLankaPaymentPreview";
+import { SriLankaPreviewCard } from "../../../../components/payments/SriLankaPaymentPreview";
 
 export default function Withdrawal() {
   const { profile, accounts, isKycVerified, hasSubmittedDocuments, refresh } =
@@ -27,6 +27,10 @@ export default function Withdrawal() {
   const [idrBanks, setIdrBanks] = useState<{ code: string; description: string }[]>([]);
   const [idrQuote, setIdrQuote] = useState<{ idrPerUsd: number; minIdr: number; maxIdr: number } | null>(null);
   const [idrBanksLoading, setIdrBanksLoading] = useState(false);
+  // LKR (RameeGlobalPay) bank list + rate/minimum, fetched when the LKR method is chosen.
+  const [lkrBanks, setLkrBanks] = useState<{ code: string; description: string }[]>([]);
+  const [lkrQuote, setLkrQuote] = useState<{ lkrPerUsd: number; minLkr: number } | null>(null);
+  const [lkrBanksLoading, setLkrBanksLoading] = useState(false);
 
   // 🔹 Form state with default values
   const [form, setForm] = useState({
@@ -57,6 +61,10 @@ export default function Withdrawal() {
     idrHolderName: "",
     idrAccountNumber: "",
     idrBankCode: "",
+    // LKR bank details (RameeGlobalPay payout) - bank is picked from the live list
+    lkrHolderName: "",
+    lkrAccountNumber: "",
+    lkrBankCode: "",
   });
 
   // Prefill the account selector and bank details from the shared profile
@@ -82,6 +90,8 @@ export default function Withdrawal() {
       vndBankName: prev.vndBankName || profile.bankName || "",
       idrHolderName: prev.idrHolderName || profile.accountHolderName || "",
       idrAccountNumber: prev.idrAccountNumber || profile.accountNumber || "",
+      lkrHolderName: prev.lkrHolderName || profile.accountHolderName || "",
+      lkrAccountNumber: prev.lkrAccountNumber || profile.accountNumber || "",
     }));
   }, [profile, accounts]);
 
@@ -98,6 +108,26 @@ export default function Withdrawal() {
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === "currency" && value === "VND") loadVndQuote();
     if (name === "currency" && value === "IDR") loadIdrBanks();
+    if (name === "currency" && value === "LKR") loadLkrBanks();
+  };
+
+  // Bank list + rate/minimum for LKR withdrawals; the backend re-checks everything on submit.
+  const loadLkrBanks = async () => {
+    setLkrBanksLoading(true);
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE}/api/payment/ramee/globalpayoutmethod?currency=LKR`);
+      const banks: { code: string; description: string }[] = Array.isArray(res.data?.data) ? res.data.data : [];
+      setLkrBanks([...banks].sort((a, b) => a.description.localeCompare(b.description)));
+      const quote = res.data?.quote;
+      const next = quote ? { lkrPerUsd: Number(quote.lkrPerUsd), minLkr: Number(quote.minLkr) } : null;
+      setLkrQuote(next);
+      return next;
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "LKR withdrawals are unavailable right now.");
+      return null;
+    } finally {
+      setLkrBanksLoading(false);
+    }
   };
 
   // Bank list + rate/limits for IDR withdrawals; the backend re-checks everything on submit.
@@ -151,7 +181,6 @@ export default function Withdrawal() {
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
-  if (form.currency === "LKR") return;
   const amountNum = Number(form.amount);
 
   if (isNaN(amountNum) || amountNum <= 0) {
@@ -209,6 +238,34 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
     amountInUSD = Math.ceil((amountNum / quote.idrPerUsd) * 100) / 100;
   }
+  if (form.currency === "LKR") {
+    const quote = lkrQuote || (await loadLkrBanks());
+    if (!quote) {
+      toast.error("The LKR exchange rate is unavailable. Please try again shortly.");
+      return;
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(form.amount.trim())) {
+      toast.error("Enter a valid LKR amount with up to two decimal places.");
+      return;
+    }
+    if (amountNum < quote.minLkr) {
+      toast.error(`Minimum withdrawal amount is LKR ${quote.minLkr.toLocaleString("en-US")}.`);
+      return;
+    }
+    if (!form.lkrBankCode) {
+      toast.error("Select a bank.");
+      return;
+    }
+    if (!/^[A-Za-z0-9-]{4,34}$/.test(form.lkrAccountNumber.trim())) {
+      toast.error("Enter a valid bank account number.");
+      return;
+    }
+    if (!form.lkrHolderName.trim()) {
+      toast.error("Enter the account holder name.");
+      return;
+    }
+    amountInUSD = Math.ceil((amountNum / quote.lkrPerUsd) * 100) / 100;
+  }
 
   // 2. Balance Check (MT5 balance is in USD)
   if (amountInUSD > balance) {
@@ -261,6 +318,16 @@ const handleSubmit = async (e: React.FormEvent) => {
             bankCode: form.idrBankCode,
             account: form.idrAccountNumber.trim(),
             accountHolderName: form.idrHolderName.trim(),
+          }
+        : form.currency === "LKR"
+        ? {
+            accountNo: form.accountNo,
+            currency: "LKR",
+            amount: form.amount.trim(),
+            note: form.note,
+            bankCode: form.lkrBankCode,
+            account: form.lkrAccountNumber.trim(),
+            accountHolderName: form.lkrHolderName.trim(),
           }
         : form;
     const res = await axios.post(
@@ -404,13 +471,10 @@ const handleSubmit = async (e: React.FormEvent) => {
                     <option value="USD">USD (International Wire)</option>
                     <option value="VND">VND (Vietnam Bank Transfer)</option>
                     <option value="IDR">IDR (Indonesia Bank Transfer)</option>
-                    <option value="LKR">LKR (Sri Lanka · RameePay test)</option>
+                    <option value="LKR">LKR (Sri Lanka Bank Transfer)</option>
                   </select>
                 </div>
 
-              {form.currency === "LKR" ? (
-                <SriLankaPaymentPreview direction="withdrawal" />
-              ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* 2A. CRYPTO FIELDS */}
                 {form.currency === "CRYPTO" && (
@@ -682,10 +746,53 @@ const handleSubmit = async (e: React.FormEvent) => {
                   </>
                 )}
 
+                {/* 2F. LKR FIELDS (RameeGlobalPay bank payout, bank chosen from the live list) */}
+                {form.currency === "LKR" && (
+                  <>
+                    <div>
+                      <label htmlFor="lkrBankCode" className="block text-xs text-gray-400 mb-1">Bank</label>
+                      <SearchableSelect
+                        id="lkrBankCode"
+                        className="mb-3"
+                        value={form.lkrBankCode}
+                        onChange={(code) => setForm((prev) => ({ ...prev, lkrBankCode: code }))}
+                        disabled={lkrBanksLoading || lkrBanks.length === 0}
+                        placeholder={lkrBanksLoading ? "Loading banks..." : lkrBanks.length ? "Select your bank" : "No banks available"}
+                        searchPlaceholder="Search bank..."
+                        options={lkrBanks.map((bank) => ({ value: bank.code, label: bank.description }))}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="lkrHolderName" className="block text-xs text-gray-400 mb-1">Account Holder Name</label>
+                      <input
+                        id="lkrHolderName"
+                        type="text"
+                        name="lkrHolderName"
+                        placeholder="Name exactly as on the bank account"
+                        value={form.lkrHolderName}
+                        onChange={handleChange}
+                        className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm mb-3"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="lkrAccountNumber" className="block text-xs text-gray-400 mb-1">Bank Account Number</label>
+                      <input
+                        id="lkrAccountNumber"
+                        type="text"
+                        name="lkrAccountNumber"
+                        placeholder="Bank Account Number"
+                        value={form.lkrAccountNumber}
+                        onChange={handleChange}
+                        className="w-full p-2.5 rounded-xl bg-gray-800 border border-gray-700 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+
                 {/* Common Inputs */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-  Amount ({form.currency === "INR" ? "₹" : form.currency === "VND" || form.currency === "IDR" ? form.currency : "$"})
+  Amount ({form.currency === "INR" ? "₹" : form.currency === "VND" || form.currency === "IDR" || form.currency === "LKR" ? form.currency : "$"})
 </label>
                   <input
                     type="number"
@@ -704,6 +811,20 @@ const handleSubmit = async (e: React.FormEvent) => {
                           {" "}About{" "}
                           <span className="text-gray-200">
                             ${(Math.ceil((Number(form.amount) / idrQuote.idrPerUsd) * 100) / 100).toFixed(2)}
+                          </span>{" "}
+                          will be deducted from your MT5 balance.
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {form.currency === "LKR" && lkrQuote && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Minimum LKR {lkrQuote.minLkr.toLocaleString("en-US")}.
+                      {Number(form.amount) > 0 && (
+                        <>
+                          {" "}About{" "}
+                          <span className="text-gray-200">
+                            ${(Math.ceil((Number(form.amount) / lkrQuote.lkrPerUsd) * 100) / 100).toFixed(2)}
                           </span>{" "}
                           will be deducted from your MT5 balance.
                         </>
@@ -739,7 +860,6 @@ const handleSubmit = async (e: React.FormEvent) => {
                   disabled={loading}
                 />
               </form>
-              )}
             </div>
           </div>
         )}
