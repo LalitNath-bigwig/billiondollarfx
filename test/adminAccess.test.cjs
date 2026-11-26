@@ -30,3 +30,11 @@ test("owners retain staff/history access while managers only receive their selec
   for (const path of ["/staff-users", "/business-report", "/users", "/payout-requests", "/email-marketing"]) assert.equal(canAccessAdminPath(marketing, path), false);
   assert.equal(canAccessAdminPath({ role: "manager", permissions: ["content"] }, "/blog-management/add"), true);
 });
+
+test("KYC approval is a separate manager permission", () => {
+  const reviewer = { role: "manager", permissions: ["trading_approval"] };
+  assert.equal(adminHome(reviewer), "/trading-approvals");
+  assert.equal(canAccessAdminPath(reviewer, "/trading-approvals"), true);
+  for (const path of ["/users", "/payout-requests", "/staff-users"]) assert.equal(canAccessAdminPath(reviewer, path), false);
+  assert.equal(canAccessAdminPath({ role: "manager", permissions: ["crm", "clients"] }, "/trading-approvals"), false);
+});
