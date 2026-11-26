@@ -609,8 +609,8 @@ export default function UsersPage() {
                 {manualMessage && <p role="status" className="text-sm text-amber-200">{manualMessage}</p>}
               </section>}
               {/* Documents */}
-              {adminSession?.role === "owner" && selectedUser.identityReviewMode === "bdfx_owner_review" && (
-                <OwnerTradingReview key={selectedUser._id} client={selectedUser} onApproved={() => {
+              {(adminSession?.role === "owner" || adminSession?.permissions.includes("trading_approval")) && selectedUser.identityReviewMode === "bdfx_owner_review" && (
+                <OwnerTradingReview key={selectedUser._id} client={selectedUser} canOpenEvidence={adminSession.role === "owner"} onApproved={() => {
                   const id = selectedUser._id;
                   setUsers(users => users.map(user => user._id === id ? { ...user, isKycVerified: true } : user));
                   setSelectedUser(user => user?._id === id ? { ...user, isKycVerified: true } : user);

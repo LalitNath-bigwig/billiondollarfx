@@ -5,7 +5,7 @@ export type BuddyGuide = typeof buddyGuides[number];
 export type BuddyContext = { topic: TopicId; question: number; href: string };
 export const BUDDY_ISSUE_EVENT = "bdfx:guide-issue";
 
-const adminPaths = new Set(["admin", "admin-login", "adminDashboard", "users", "brokers", "tickets", "IB", "all-transactions", "bankapproval", "payout-requests", "blog-management", "enquiries", "activity-log", "staff-users", "business-report", "website-analytics", "email-marketing", "chat-reports", "api"]);
+const adminPaths = new Set(["admin", "admin-login", "adminDashboard", "users", "brokers", "tickets", "IB", "all-transactions", "bankapproval", "payout-requests", "blog-management", "enquiries", "activity-log", "staff-users", "trading-approvals", "business-report", "website-analytics", "email-marketing", "chat-reports", "api"]);
 export function buddyContext(pathname: string): BuddyContext | null {
   const path = pathname.split("?")[0].split("#")[0].replace(/\/+$/, "") || "/";
   if (adminPaths.has(path.split("/")[1])) return null;
