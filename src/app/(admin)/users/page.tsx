@@ -679,8 +679,11 @@ export default function UsersPage() {
 
             {/* Actions */}
             <div className="sticky bottom-0 bg-[#1f2937] border-t border-gray-800 px-6 py-4 flex flex-wrap justify-end gap-3">
+              {(adminSession?.role === "owner" || (adminSession?.permissions.includes("portal_approval") &&
+                !selectedUser.portalBlocked && selectedUser.portalAccessStatus !== "rejected" && selectedUser.portalAccessStatus !== "approved")) && (
+                <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision("approved")} className="rounded-full bg-green-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Approve portal access</button>
+              )}
               {adminSession?.role === "owner" && <div className="flex gap-2">
-                <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision("approved")} className="rounded-full bg-green-700 px-4 py-2 text-sm font-semibold disabled:opacity-50">Approve</button>
                 <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision("rejected")} className="rounded-full border border-red-600 px-4 py-2 text-sm font-semibold text-red-300 disabled:opacity-50">Reject</button>
                 <button type="button" disabled={portalAccessBusy} onClick={() => setPortalAccessDecision(selectedUser.portalBlocked ? "unblock" : "block")} className="rounded-full border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-50">
                   {selectedUser.portalBlocked ? "Unblock" : "Block"}
